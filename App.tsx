@@ -1,212 +1,375 @@
-import React, { useState, useRef } from 'react';
-import { Upload, Camera, Sparkles, X, ShoppingBag } from 'lucide-react';
-import { generateListing } from './services/gemini';
-import { ImageFile, ListingResult, ListingStyle } from './types';
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Upload, Camera, Sparkles, X, History, PlusCircle, 
+  MessageCircle, Zap, DollarSign, CameraIcon, Lightbulb, 
+  Copy, Check, TrendingUp, AlertCircle 
+} from 'lucide-react';
+import { generateListing, generateNegotiationResponses } from './services/gemini';
+import { ImageFile, ListingResult, ListingStyle, HistoryItem, NegotiationResponse } from './types';
 import { Button } from './components/ui/Button';
-import { ResultSection } from './components/ResultSection';
+import { HistoryList } from './components/HistoryList';
+
+// --- SUB-COMPONENTS ---
+
+const ScoreIndicator: React.FC<{ score: number }> = ({ score }) => {
+  let colorClass = "text-red-500 border-red-200 bg-red-50";
+  let label = "Kurang Oke";
+  if (score >= 8) {
+    colorClass = "text-emerald-600 border-emerald-200 bg-emerald-50";
+    label = "Super Kece";
+  } else if (score >= 5) {
+    colorClass = "text-yellow-600 border-yellow-200 bg-yellow-50";
+    label = "Lumayan";
+  }
+
+  return (
+    <div className={`flex flex-col items-center justify-center w-24 h-24 rounded-full border-4 ${colorClass} transition-all`}>
+      <span className="text-3xl font-bold">{score}</span>
+      <span className="text-[10px] uppercase font-bold tracking-wider">{label}</span>
+    </div>
+  );
+};
+
+const CopyCard: React.FC<{ title: string; content: string; variant?: 'default' | 'chat' }> = ({ title, content, variant = 'default' }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className={`relative group rounded-xl border ${variant === 'chat' ? 'bg-indigo-50 border-indigo-100' : 'bg-white border-slate-200'} p-4 shadow-sm hover:shadow-md transition-all`}>
+      <div className="flex justify-between items-start mb-2">
+        <h4 className="text-xs font-bold uppercase text-slate-500 tracking-wide">{title}</h4>
+        <button onClick={handleCopy} className="text-slate-400 hover:text-indigo-600 transition-colors">
+          {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
+        </button>
+      </div>
+      <p className="text-sm text-slate-800 whitespace-pre-wrap leading-relaxed">{content}</p>
+    </div>
+  );
+};
+
+// --- MAIN APP COMPONENT ---
 
 const App: React.FC = () => {
+  // Navigation State
+  const [activeTab, setActiveTab] = useState<'magic' | 'negotiate' | 'history'>('magic');
+
+  // Magic Listing State
   const [imageFile, setImageFile] = useState<ImageFile | null>(null);
-  const [style, setStyle] = useState<ListingStyle>('casual');
-  const [isLoading, setIsLoading] = useState(false);
-  const [result, setResult] = useState<ListingResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  
+  const [modalPrice, setModalPrice] = useState<string>('');
+  const [listingResult, setListingResult] = useState<ListingResult | null>(null);
+  const [isListingLoading, setIsListingLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  // Negotiation State
+  const [buyerMessage, setBuyerMessage] = useState('');
+  const [negotiationResults, setNegotiationResults] = useState<NegotiationResponse[]>([]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
 
-    // Convert to Base64
+  // History State
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+
+  // Load History
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('sellitfast_history');
+      if (saved) setHistory(JSON.parse(saved));
+    } catch (e) { console.error(e); }
+  }, []);
+
+  // --- HANDLERS: MAGIC LISTING ---
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
-      const base64String = reader.result as string;
       setImageFile({
         file,
         previewUrl: URL.createObjectURL(file),
-        base64: base64String
+        base64: reader.result as string
       });
-      setResult(null);
-      setError(null);
+      setListingResult(null);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const file = e.dataTransfer.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-       const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        setImageFile({
-          file,
-          previewUrl: URL.createObjectURL(file),
-          base64: base64String
-        });
-        setResult(null);
-        setError(null);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleGenerate = async () => {
+  const handleGenerateListing = async () => {
     if (!imageFile) return;
-
-    setIsLoading(true);
-    setError(null);
-
+    setIsListingLoading(true);
     try {
-      const data = await generateListing(imageFile.base64, style);
-      setResult(data);
-    } catch (err) {
-      setError("Terjadi kesalahan pada AI. Silakan coba lagi.");
-      console.error(err);
+      const result = await generateListing(imageFile.base64, 'casual'); // Default casual for simplicity in V2
+      setListingResult(result);
+      
+      // Save to History (simplified thumbnail logic)
+      const newItem: HistoryItem = {
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        thumbnailBase64: imageFile.base64, // In production, resize this!
+        result: result,
+        style: 'casual',
+        modalPrice: modalPrice ? parseInt(modalPrice) : 0
+      };
+      const newHistory = [newItem, ...history];
+      setHistory(newHistory);
+      localStorage.setItem('sellitfast_history', JSON.stringify(newHistory));
+    } catch (error) {
+      alert("Gagal menganalisis gambar. Coba lagi.");
     } finally {
-      setIsLoading(false);
+      setIsListingLoading(false);
     }
   };
 
-  const clearImage = () => {
+  const resetListing = () => {
     setImageFile(null);
-    setResult(null);
-    setError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    setListingResult(null);
+    setModalPrice('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // --- HANDLERS: NEGOTIATION ---
+
+  const handleGenerateChat = async () => {
+    if (!buyerMessage.trim()) return;
+    setIsChatLoading(true);
+    try {
+      const responses = await generateNegotiationResponses(buyerMessage);
+      setNegotiationResults(responses);
+    } catch (error) {
+      alert("Gagal membuat balasan. Coba lagi.");
+    } finally {
+      setIsChatLoading(false);
     }
+  };
+
+  // --- FORMATTER ---
+  const formatRupiah = (num: number) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
-      {/* Header */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-md mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2 text-indigo-600">
-            <ShoppingBag className="w-6 h-6" />
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Jual Cepat</h1>
+    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col">
+      
+      {/* HEADER */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 px-4 py-3 shadow-sm">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="bg-indigo-600 text-white p-1.5 rounded-lg">
+              <Zap className="w-5 h-5" />
+            </div>
+            <h1 className="font-bold text-lg tracking-tight">Sell<span className="text-indigo-600"> Line</span></h1>
           </div>
-          <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-            Power by AI
-          </div>
+          <button onClick={() => setActiveTab('history')} className="p-2 text-slate-400 hover:text-indigo-600">
+            <History className="w-6 h-6" />
+          </button>
         </div>
       </header>
 
-      <main className="max-w-md mx-auto px-4 py-6 space-y-8">
-        {/* Intro */}
-        {!imageFile && !result && (
-          <div className="text-center space-y-2 mb-8">
-            <h2 className="text-2xl font-bold text-slate-900">Ubah Foto Jadi Uang</h2>
-            <p className="text-slate-600">Upload foto barang bekasmu dan biarkan AI membuatkan teks iklan yang menarik secara instan.</p>
+      {/* MAIN CONTENT */}
+      <main className="flex-1 max-w-md mx-auto w-full p-4 pb-24">
+        
+        {/* --- TAB 1: MAGIC LISTING --- */}
+        {activeTab === 'magic' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Upload Section */}
+            {!listingResult ? (
+              <div className="space-y-4">
+                <div className="text-center mb-6">
+                  <h2 className="text-2xl font-bold mb-2">Jual Barang Bekas?</h2>
+                  <p className="text-slate-500">Foto barangnya, kita buatkan iklannya & hitung perkiraan harganya.</p>
+                </div>
+
+                {!imageFile ? (
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-slate-300 rounded-3xl h-64 flex flex-col items-center justify-center bg-white cursor-pointer hover:border-indigo-500 hover:bg-indigo-50 transition-all group"
+                  >
+                    <div className="w-16 h-16 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <CameraIcon className="w-8 h-8" />
+                    </div>
+                    <span className="font-semibold text-slate-700">Ambil / Upload Foto</span>
+                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+                  </div>
+                ) : (
+                  <div className="relative rounded-3xl overflow-hidden shadow-lg">
+                    <img src={imageFile.previewUrl} className="w-full h-64 object-cover" alt="Preview" />
+                    <button onClick={resetListing} className="absolute top-3 right-3 bg-black/50 text-white p-2 rounded-full hover:bg-red-500 transition-colors">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Modal Price Input */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Modal Beli (Opsional)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-semibold">Rp</span>
+                    <input 
+                      type="number" 
+                      placeholder="0"
+                      value={modalPrice}
+                      onChange={(e) => setModalPrice(e.target.value)}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-lg border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-semibold"
+                    />
+                  </div>
+                </div>
+
+                <Button 
+                  onClick={handleGenerateListing} 
+                  disabled={!imageFile}
+                  isLoading={isListingLoading}
+                  className="w-full text-lg py-4 shadow-xl shadow-indigo-100"
+                >
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Analisis Magic
+                </Button>
+              </div>
+            ) : (
+              // RESULT VIEW
+              <div className="space-y-6">
+                {/* Score & Advice Card */}
+                <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-center gap-5">
+                  <ScoreIndicator score={listingResult.photo_score} />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5 text-orange-500 mb-1">
+                      <Lightbulb className="w-4 h-4" />
+                      <span className="text-xs font-bold uppercase">Saran Foto</span>
+                    </div>
+                    <p className="text-sm text-slate-700 italic">"{listingResult.photo_advice}"</p>
+                  </div>
+                </div>
+
+                {/* Financial Card */}
+                <div className="bg-gradient-to-br from-indigo-600 to-purple-700 rounded-2xl p-5 text-white shadow-lg">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-indigo-200 text-xs font-medium uppercase">Saran Harga Jual</span>
+                      <div className="text-2xl font-bold mt-1">{formatRupiah(listingResult.suggested_price)}</div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-indigo-200 text-xs font-medium uppercase">Potensi Keuntungan</span>
+                      <div className="text-2xl font-bold mt-1 text-emerald-300">
+                        {modalPrice ? formatRupiah(listingResult.suggested_price - parseInt(modalPrice)) : '-'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content Cards */}
+                <div className="space-y-3">
+                  <CopyCard title="Judul Iklan" content={listingResult.title} />
+                  <CopyCard title="Deskripsi Lengkap" content={listingResult.description} />
+                  <CopyCard title="Hashtags" content={listingResult.hashtags} />
+                </div>
+
+                <Button variant="outline" onClick={resetListing} className="w-full">
+                  Foto Barang Lain
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Upload Area */}
-        <div className="space-y-4">
-          {!imageFile ? (
-            <div 
-              className="border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center justify-center text-center bg-white hover:bg-slate-50 hover:border-indigo-400 transition-all cursor-pointer group"
-              onClick={() => fileInputRef.current?.click()}
-              onDragOver={handleDragOver}
-              onDrop={handleDrop}
-            >
-              <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Camera className="w-8 h-8" />
-              </div>
-              <p className="font-semibold text-slate-900">Ketuk untuk upload foto</p>
-              <p className="text-sm text-slate-500 mt-1">atau tarik & lepas di sini</p>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="image/*" 
-                onChange={handleFileChange} 
-              />
+        {/* --- TAB 2: NEGOTIATION WINGMAN --- */}
+        {activeTab === 'negotiate' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl font-bold mb-2">Bantu Balas Chat</h2>
+              <p className="text-slate-500">Membantu anda untuk memberi saran balasan pesan para pembeli.</p>
             </div>
-          ) : (
-            <div className="relative rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white">
-              <img 
-                src={imageFile.previewUrl} 
-                alt="Preview" 
-                className="w-full h-64 object-contain bg-slate-100" 
-              />
-              <button 
-                onClick={clearImage}
-                className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 backdrop-blur-sm transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-          )}
-        </div>
 
-        {/* Controls */}
-        {imageFile && !result && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Pilih Gaya Bahasa</label>
-              <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200 rounded-xl">
-                <button
-                  onClick={() => setStyle('casual')}
-                  className={`py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                    style === 'casual' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  😎 Santai (Sosmed)
-                </button>
-                <button
-                  onClick={() => setStyle('formal')}
-                  className={`py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                    style === 'formal' 
-                      ? 'bg-white text-indigo-600 shadow-sm' 
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
-                >
-                  💼 Formal (Market)
-                </button>
-              </div>
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Pesan dari Pembeli</label>
+              <textarea
+                value={buyerMessage}
+                onChange={(e) => setBuyerMessage(e.target.value)}
+                placeholder='Contoh: "Gan, 50 ribu dikasih gak? COD di mana?"'
+                className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[100px] resize-none"
+              />
             </div>
 
             <Button 
-              onClick={handleGenerate} 
-              isLoading={isLoading} 
-              className="w-full text-lg shadow-indigo-200 shadow-lg"
+              onClick={handleGenerateChat} 
+              isLoading={isChatLoading}
+              disabled={!buyerMessage}
+              className="w-full"
             >
-              <Sparkles className="w-5 h-5 mr-2" />
-              Buat Iklan Sekarang
+              <MessageCircle className="w-5 h-5 mr-2" />
+              Buatkan Balasan
             </Button>
+
+            {/* Response Cards */}
+            <div className="space-y-3">
+              {negotiationResults.map((res, idx) => (
+                <div key={idx} className="animate-in slide-in-from-bottom-2" style={{ animationDelay: `${idx * 100}ms` }}>
+                  <CopyCard 
+                    title={res.type} 
+                    content={res.text} 
+                    variant="chat"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        {/* Error Message */}
-        {error && (
-          <div className="p-4 bg-red-50 text-red-600 rounded-xl border border-red-100 text-sm">
-            {error}
+        {/* --- TAB 3: HISTORY --- */}
+        {activeTab === 'history' && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+             <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">Riwayat Penjualan</h2>
+                <button onClick={() => { setHistory([]); localStorage.removeItem('sellitfast_history'); }} className="text-red-500 text-sm">Clear All</button>
+             </div>
+             {history.length === 0 ? (
+               <p className="text-center text-slate-400 mt-10">Belum ada data.</p>
+             ) : (
+               history.map((item) => (
+                 <div key={item.id} className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex gap-4">
+                   <img src={item.thumbnailBase64} className="w-16 h-16 rounded-lg object-cover bg-slate-100" />
+                   <div className="flex-1 min-w-0">
+                     <h4 className="font-bold text-slate-900 truncate">{item.result.title}</h4>
+                     <p className="text-sm text-emerald-600 font-medium">{formatRupiah(item.result.suggested_price)}</p>
+                     <div className="mt-1 flex items-center gap-2">
+                        <span className="text-[10px] px-2 py-0.5 bg-slate-100 rounded-full text-slate-500">
+                          Score: {item.result.photo_score}
+                        </span>
+                     </div>
+                   </div>
+                 </div>
+               ))
+             )}
           </div>
         )}
 
-        {/* Results */}
-        {result && <ResultSection result={result} />}
-
-        {result && (
-           <Button 
-             variant="outline" 
-             onClick={clearImage} 
-             className="w-full mt-8"
-           >
-             Buat Iklan Baru
-           </Button>
-        )}
       </main>
+
+      {/* BOTTOM NAVIGATION */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-2 z-40 pb-safe">
+        <div className="max-w-md mx-auto flex items-center justify-around">
+          <button 
+            onClick={() => setActiveTab('magic')}
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-colors ${activeTab === 'magic' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <Camera className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Magic List</span>
+          </button>
+
+          <div className="w-px h-8 bg-slate-200"></div>
+
+          <button 
+            onClick={() => setActiveTab('negotiate')}
+            className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-colors ${activeTab === 'negotiate' ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            <MessageCircle className="w-6 h-6" />
+            <span className="text-[10px] font-medium">Wingman</span>
+          </button>
+        </div>
+      </nav>
+
     </div>
   );
 };

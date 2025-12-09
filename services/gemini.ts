@@ -1,47 +1,68 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { ListingResult, ListingStyle } from "../types";
+import { ListingResult, ListingStyle, NegotiationResponse } from "../types";
 
 // Initialize the client
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+// Schema untuk Magic Listing (Vision)
 const listingSchema: Schema = {
   type: Type.OBJECT,
   properties: {
+    photo_score: {
+      type: Type.INTEGER,
+      description: "Skor kualitas foto dari 1-10 berdasarkan pencahayaan, komposisi, dan kejelasan produk.",
+    },
+    photo_advice: {
+      type: Type.STRING,
+      description: "Saran singkat untuk fotografer agar foto lebih menjual (maksimal 2 kalimat).",
+    },
     title: {
       type: Type.STRING,
       description: "Judul iklan yang menarik perhatian pembeli dalam Bahasa Indonesia.",
     },
     description: {
       type: Type.STRING,
-      description: "Deskripsi detail tentang kondisi, warna, merek, dan fitur utama dalam Bahasa Indonesia.",
+      description: "Deskripsi detail tentang kondisi dan fitur utama dalam Bahasa Indonesia.",
     },
-    price_estimate: {
-      type: Type.STRING,
-      description: "Estimasi rentang harga pasar di Indonesia (contoh: 'Rp 500.000 - Rp 700.000').",
+    suggested_price: {
+      type: Type.INTEGER,
+      description: "Estimasi harga jual pasar barang bekas di Indonesia dalam format angka (tanpa titik/koma).",
     },
     hashtags: {
       type: Type.STRING,
-      description: "Hashtag yang relevan untuk visibilitas media sosial, dipisahkan dengan spasi.",
+      description: "Hashtag yang relevan dipisahkan spasi.",
     },
   },
-  required: ["title", "description", "price_estimate", "hashtags"],
+  required: ["photo_score", "photo_advice", "title", "description", "suggested_price", "hashtags"],
+};
+
+// Schema untuk Negotiation Wingman (Text)
+const negotiationSchema: Schema = {
+  type: Type.ARRAY,
+  items: {
+    type: Type.OBJECT,
+    properties: {
+      type: { type: Type.STRING, enum: ['Sopan', 'Tegas', 'Lucu'] },
+      text: { type: Type.STRING, description: "Isi pesan balasan." }
+    },
+    required: ["type", "text"]
+  }
 };
 
 export const generateListing = async (
   imageBase64: string,
   style: ListingStyle
 ): Promise<ListingResult> => {
-  const modelId = "gemini-2.5-flash"; // Best for multimodal tasks
+  const modelId = "gemini-2.5-flash"; 
 
-  // Clean base64 string if it contains metadata header
   const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
 
-  let systemInstruction = "Kamu adalah ahli copywriting e-commerce dan reseller profesional di Indonesia. Tugasmu adalah membuat teks penjualan barang bekas berdasarkan gambar.";
+  let systemInstruction = "Kamu adalah konsultan bisnis barang bekas profesional. Analisis gambar yang diberikan.";
   
   if (style === 'casual') {
-    systemInstruction += " Gunakan nada SANTAI, asik, dan penuh energi cocok untuk Instagram/TikTok/Facebook. Gunakan bahasa gaul yang wajar, emoji, dan tanda seru. Buat seolah-olah teman yang merekomendasikan produk.";
+    systemInstruction += " Gunakan gaya bahasa SANTAI, akrab, cocok untuk sosial media.";
   } else {
-    systemInstruction += " Gunakan nada FORMAL, profesional, dan terpercaya cocok untuk Marketplace (Tokopedia/Shopee) atau LinkedIn. Gunakan Bahasa Indonesia yang baku, jelas, deskriptif, dan sopan. Jangan gunakan emoji berlebihan.";
+    systemInstruction += " Gunakan gaya bahasa FORMAL, profesional, cocok untuk marketplace.";
   }
 
   try {
@@ -51,12 +72,12 @@ export const generateListing = async (
         parts: [
           {
             inlineData: {
-              mimeType: "image/jpeg", // Assuming JPEG for simplicity, API handles most standard types
+              mimeType: "image/jpeg",
               data: cleanBase64,
             },
           },
           {
-            text: "Analisis gambar ini dan buatkan teks iklan penjualan. Berikan judul yang menarik (catchy), deskripsi detail (kondisi/merk/warna), estimasi harga dalam Rupiah (IDR), dan hashtag yang relevan. Gunakan Bahasa Indonesia.",
+            text: "Analisis foto produk ini. Berikan skor foto (1-10), saran perbaikan foto, judul iklan, deskripsi, estimasi harga jual yang wajar (IDR), dan hashtag.",
           },
         ],
       },
@@ -74,7 +95,39 @@ export const generateListing = async (
       throw new Error("Tidak ada respons teks dari Gemini.");
     }
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("Gemini Vision Error:", error);
+    throw error;
+  }
+};
+
+export const generateNegotiationResponses = async (
+  buyerMessage: string
+): Promise<NegotiationResponse[]> => {
+  const modelId = "gemini-2.5-flash";
+
+  try {
+    const response = await ai.models.generateContent({
+      model: modelId,
+      contents: {
+        parts: [
+          {
+            text: `Seorang pembeli mengirim pesan: "${buyerMessage}". Buatkan 3 opsi balasan: 1. Sopan & Profesional, 2. Tegas (tapi tidak kasar), 3. Santai/Lucu.`,
+          },
+        ],
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: negotiationSchema,
+      },
+    });
+
+    if (response.text) {
+      return JSON.parse(response.text) as NegotiationResponse[];
+    } else {
+      throw new Error("Gagal generate balasan chat.");
+    }
+  } catch (error) {
+    console.error("Gemini Chat Error:", error);
     throw error;
   }
 };

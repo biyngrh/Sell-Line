@@ -54,13 +54,19 @@ const ResultCard: React.FC<{
 export const ResultSection: React.FC<ResultSectionProps> = ({ result }) => {
   const [copiedAll, setCopiedAll] = useState(false);
 
+  const formatRupiah = (num: number) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
+  };
+
+  const formattedPrice = formatRupiah(result.suggested_price);
+
   const handleCopyAll = async () => {
     const allText = `
 ${result.title}
 
 ${result.description}
 
-Harga: ${result.price_estimate}
+Harga: ${formattedPrice}
 
 ${result.hashtags}
     `.trim();
@@ -108,7 +114,7 @@ ${result.hashtags}
         
         <ResultCard 
           title="Estimasi Harga" 
-          content={result.price_estimate} 
+          content={formattedPrice} 
           icon={<DollarSign className="w-5 h-5" />}
           color="text-emerald-600"
         />

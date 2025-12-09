@@ -1,6 +1,6 @@
 {
-  "name": "Jual Cepat",
-  "description": "Asisten bertenaga AI untuk membuat teks iklan penjualan secara instan dari foto produk.",
+  "name": "Sell-Line",
+  "description": "Asisten AI All-in-One untuk reseller: Analisis foto, buat deskripsi, hitung cuan, dan bantu balas chat pembeli.",
   "requestFramePermissions": [
     "camera"
   ]
