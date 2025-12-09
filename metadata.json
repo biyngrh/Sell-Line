@@ -1,0 +1,7 @@
+{
+  "name": "Sell-Line",
+  "description": "AI-powered assistant to instantly generate sales listings from product photos.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
