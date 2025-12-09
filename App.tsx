@@ -68,7 +68,7 @@ const App: React.FC = () => {
       const data = await generateListing(imageFile.base64, style);
       setResult(data);
     } catch (err) {
-      setError("Something went wrong with the AI. Please try again.");
+      setError("Terjadi kesalahan pada AI. Silakan coba lagi.");
       console.error(err);
     } finally {
       setIsLoading(false);
@@ -91,10 +91,10 @@ const App: React.FC = () => {
         <div className="max-w-md mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-indigo-600">
             <ShoppingBag className="w-6 h-6" />
-            <h1 className="text-xl font-bold tracking-tight text-slate-900">Sell-Line</h1>
+            <h1 className="text-xl font-bold tracking-tight text-slate-900">Jual Cepat</h1>
           </div>
           <div className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-            AI Powered
+            Power by AI
           </div>
         </div>
       </header>
@@ -103,8 +103,8 @@ const App: React.FC = () => {
         {/* Intro */}
         {!imageFile && !result && (
           <div className="text-center space-y-2 mb-8">
-            <h2 className="text-2xl font-bold text-slate-900">Turn Photos into Sales</h2>
-            <p className="text-slate-600">Upload a photo of your item and let AI write the perfect listing for you instantly.</p>
+            <h2 className="text-2xl font-bold text-slate-900">Ubah Foto Jadi Uang</h2>
+            <p className="text-slate-600">Upload foto barang bekasmu dan biarkan AI membuatkan teks iklan yang menarik secara instan.</p>
           </div>
         )}
 
@@ -120,8 +120,8 @@ const App: React.FC = () => {
               <div className="w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <Camera className="w-8 h-8" />
               </div>
-              <p className="font-semibold text-slate-900">Tap to upload photo</p>
-              <p className="text-sm text-slate-500 mt-1">or drag and drop here</p>
+              <p className="font-semibold text-slate-900">Ketuk untuk upload foto</p>
+              <p className="text-sm text-slate-500 mt-1">atau tarik & lepas di sini</p>
               <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -151,7 +151,7 @@ const App: React.FC = () => {
         {imageFile && !result && (
           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-slate-700">Choose Vibe</label>
+              <label className="text-sm font-semibold text-slate-700">Pilih Gaya Bahasa</label>
               <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200 rounded-xl">
                 <button
                   onClick={() => setStyle('casual')}
@@ -161,7 +161,7 @@ const App: React.FC = () => {
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
                 >
-                  😎 Casual (Sosmed)
+                  😎 Santai (Sosmed)
                 </button>
                 <button
                   onClick={() => setStyle('formal')}
@@ -182,7 +182,7 @@ const App: React.FC = () => {
               className="w-full text-lg shadow-indigo-200 shadow-lg"
             >
               <Sparkles className="w-5 h-5 mr-2" />
-              Generate Listing
+              Buat Iklan Sekarang
             </Button>
           </div>
         )}
@@ -203,7 +203,7 @@ const App: React.FC = () => {
              onClick={clearImage} 
              className="w-full mt-8"
            >
-             Start New Listing
+             Buat Iklan Baru
            </Button>
         )}
       </main>

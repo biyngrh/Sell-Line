@@ -9,19 +9,19 @@ const listingSchema: Schema = {
   properties: {
     title: {
       type: Type.STRING,
-      description: "A catchy, attention-grabbing title for the product listing.",
+      description: "Judul iklan yang menarik perhatian pembeli dalam Bahasa Indonesia.",
     },
     description: {
       type: Type.STRING,
-      description: "A detailed description including condition, color, brand, and key features.",
+      description: "Deskripsi detail tentang kondisi, warna, merek, dan fitur utama dalam Bahasa Indonesia.",
     },
     price_estimate: {
       type: Type.STRING,
-      description: "An estimated price range based on the item appearance (e.g., 'IDR 500.000 - IDR 700.000').",
+      description: "Estimasi rentang harga pasar di Indonesia (contoh: 'Rp 500.000 - Rp 700.000').",
     },
     hashtags: {
       type: Type.STRING,
-      description: "Relevant hashtags for social media visibility, space separated.",
+      description: "Hashtag yang relevan untuk visibilitas media sosial, dipisahkan dengan spasi.",
     },
   },
   required: ["title", "description", "price_estimate", "hashtags"],
@@ -36,12 +36,12 @@ export const generateListing = async (
   // Clean base64 string if it contains metadata header
   const cleanBase64 = imageBase64.replace(/^data:image\/(png|jpeg|jpg|webp);base64,/, "");
 
-  let systemInstruction = "You are an expert e-commerce copywriter and professional reseller.";
+  let systemInstruction = "Kamu adalah ahli copywriting e-commerce dan reseller profesional di Indonesia. Tugasmu adalah membuat teks penjualan barang bekas berdasarkan gambar.";
   
   if (style === 'casual') {
-    systemInstruction += " Use a CASUAL, fun, and energetic tone suitable for Instagram/TikTok. Use emojis, slang, and exclamation marks. Make it feel like a friend recommending a product.";
+    systemInstruction += " Gunakan nada SANTAI, asik, dan penuh energi cocok untuk Instagram/TikTok/Facebook. Gunakan bahasa gaul yang wajar, emoji, dan tanda seru. Buat seolah-olah teman yang merekomendasikan produk.";
   } else {
-    systemInstruction += " Use a FORMAL, professional, and trustworthy tone suitable for marketplaces like Tokopedia or LinkedIn. Be concise, factual, and polite. Do not use emojis.";
+    systemInstruction += " Gunakan nada FORMAL, profesional, dan terpercaya cocok untuk Marketplace (Tokopedia/Shopee) atau LinkedIn. Gunakan Bahasa Indonesia yang baku, jelas, deskriptif, dan sopan. Jangan gunakan emoji berlebihan.";
   }
 
   try {
@@ -56,7 +56,7 @@ export const generateListing = async (
             },
           },
           {
-            text: "Analyze this image and generate a sales listing. Provide a catchy title, a detailed description covering visual condition/brand/color, a price estimate in IDR, and relevant hashtags.",
+            text: "Analisis gambar ini dan buatkan teks iklan penjualan. Berikan judul yang menarik (catchy), deskripsi detail (kondisi/merk/warna), estimasi harga dalam Rupiah (IDR), dan hashtag yang relevan. Gunakan Bahasa Indonesia.",
           },
         ],
       },
@@ -71,7 +71,7 @@ export const generateListing = async (
     if (response.text) {
       return JSON.parse(response.text) as ListingResult;
     } else {
-      throw new Error("No text response from Gemini.");
+      throw new Error("Tidak ada respons teks dari Gemini.");
     }
   } catch (error) {
     console.error("Gemini API Error:", error);
