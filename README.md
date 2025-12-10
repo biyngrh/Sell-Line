@@ -7,8 +7,6 @@
 
 **Sell Line** adalah "Asisten Super Penjual" (*Seller Super App*) berbasis web yang ditenagai oleh **Google Gemini AI**. Aplikasi ini tidak hanya menuliskan deskripsi produk untuk Anda, tetapi juga bertindak sebagai kritikus foto pribadi, kalkulator keuntungan, dan teman curhat saat menghadapi pembeli yang menawar sadis.
 
-![Tampilan Aplikasi](./public/screenshot.png)
-*(Catatan: Ganti gambar ini dengan screenshot tampilan Bento Grid aplikasi Anda!)*
 
 ---
 
